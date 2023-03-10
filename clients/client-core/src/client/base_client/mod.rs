@@ -186,6 +186,7 @@ where
         lane_queue_lengths: LaneQueueLengths,
         client_connection_rx: ConnectionCommandReceiver,
         shutdown: TaskClient,
+        counter_receiver: mpsc::Receiver<u8>,
     ) {
         info!("Starting real traffic stream...");
 
@@ -200,6 +201,7 @@ where
             reply_controller_receiver,
             lane_queue_lengths,
             client_connection_rx,
+            counter_receiver,
         )
         .start_with_shutdown(shutdown);
     }
@@ -213,6 +215,7 @@ where
         reply_key_storage: SentReplyKeys,
         reply_controller_sender: ReplyControllerSender,
         shutdown: TaskClient,
+        counter_sender: mpsc::Sender<u8>,
     ) {
         info!("Starting received messages buffer controller...");
         ReceivedMessagesBufferController::new(
@@ -221,6 +224,7 @@ where
             mixnet_receiver,
             reply_key_storage,
             reply_controller_sender,
+            counter_sender,
         )
         .start_with_shutdown(shutdown)
     }
@@ -373,6 +377,9 @@ where
         let (reply_controller_sender, reply_controller_receiver) =
             reply_controller::requests::new_control_channels();
 
+        // drop cover traffic counter channel
+        let (counter_sender, counter_receiver) = mpsc::channel::<u8>(10000);
+
         let self_address = self.as_mix_recipient();
 
         // the components are started in very specific order. Unless you know what you are doing,
@@ -402,6 +409,7 @@ where
             reply_storage.key_storage(),
             reply_controller_sender.clone(),
             task_manager.subscribe(),
+            counter_sender,
         );
 
         // The sphinx_message_sender is the transmitter for any component generating sphinx packets
@@ -442,6 +450,7 @@ where
             shared_lane_queue_lengths.clone(),
             client_connection_rx,
             task_manager.subscribe(),
+            counter_receiver,
         );
 
         if !self.debug_config.disable_loop_cover_traffic_stream {

@@ -198,6 +198,7 @@ impl RealMessagesController<OsRng> {
         reply_controller_receiver: ReplyControllerReceiver,
         lane_queue_lengths: LaneQueueLengths,
         client_connection_rx: ConnectionCommandReceiver,
+        counter_receiver: mpsc::Receiver<u8>,
     ) -> Self {
         let rng = OsRng;
 
@@ -254,6 +255,7 @@ impl RealMessagesController<OsRng> {
             topology_access,
             lane_queue_lengths,
             client_connection_rx,
+            counter_receiver,
         );
 
         RealMessagesController {

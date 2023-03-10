@@ -3,6 +3,7 @@
 
 use crypto::shared_key::new_ephemeral_shared_key;
 use crypto::symmetric::stream_cipher;
+use crypto::asymmetric::{encryption, identity};
 use nymsphinx_acknowledgements::surb_ack::SurbAck;
 use nymsphinx_acknowledgements::AckKey;
 use nymsphinx_addressing::clients::Recipient;
@@ -32,7 +33,7 @@ pub enum CoverMessageError {
     SphinxError(#[from] SphinxError),
 }
 
-pub fn generate_loop_cover_surb_ack<R>(
+pub fn generate_cover_surb_ack<R>(
     rng: &mut R,
     topology: &NymTopology,
     ack_key: &AckKey,
@@ -66,7 +67,7 @@ where
 {
     // we don't care about total ack delay - we will not be retransmitting it anyway
     let (_, ack_bytes) =
-        generate_loop_cover_surb_ack(rng, topology, ack_key, full_address, average_ack_delay)?
+        generate_cover_surb_ack(rng, topology, ack_key, full_address, average_ack_delay)?
             .prepare_for_sending();
 
     // cover message can't be distinguishable from a normal traffic so we have to go through
@@ -109,6 +110,89 @@ where
         topology.random_route_to_gateway(rng, DEFAULT_NUM_MIX_HOPS, full_address.gateway())?;
     let delays = delays::generate_from_average_duration(route.len(), average_packet_delay);
     let destination = full_address.as_sphinx_destination();
+
+    // once merged, that's an easy rng injection point for sphinx packets : )
+    let packet = SphinxPacketBuilder::new()
+        .with_payload_size(packet_size.payload_size())
+        .build_packet(packet_payload, &route, &destination, &delays)
+        .unwrap();
+
+    let first_hop_address =
+        NymNodeRoutingAddress::try_from(route.first().unwrap().address).unwrap();
+
+    Ok(MixPacket::new(first_hop_address, packet, PacketMode::Mix))
+}
+
+
+pub fn generate_drop_cover_packet<R>(
+    rng: &mut R,
+    topology: &NymTopology,
+    ack_key: &AckKey,
+    full_address: &Recipient,
+    average_ack_delay: time::Duration,
+    average_packet_delay: time::Duration,
+    packet_size: PacketSize,
+) -> Result<MixPacket, CoverMessageError>
+where
+    R: RngCore + CryptoRng,
+{
+    // we don't care about total ack delay - we will not be retransmitting it anyway
+    let (_, ack_bytes) =
+        generate_cover_surb_ack(rng, topology, ack_key, full_address, average_ack_delay)?
+            .prepare_for_sending();
+
+    // cover message can't be distinguishable from a normal traffic so we have to go through
+    // all the effort of key generation, encryption, etc. Note here we are generating shared key
+    // with ourselves!
+    let (ephemeral_keypair, shared_key) = new_ephemeral_shared_key::<
+        PacketEncryptionAlgorithm,
+        PacketHkdfAlgorithm,
+        _,
+    >(rng, full_address.encryption_key());
+
+    let public_key_bytes = ephemeral_keypair.public_key().to_bytes();
+    let cover_size = packet_size.plaintext_size() - public_key_bytes.len() - ack_bytes.len();
+
+    let mut cover_content: Vec<_> = LOOP_COVER_MESSAGE_PAYLOAD
+        .iter()
+        .cloned()
+        .chain(std::iter::once(1))
+        .chain(std::iter::repeat(0))
+        .take(cover_size)
+        .collect();
+
+    let zero_iv = stream_cipher::zero_iv::<PacketEncryptionAlgorithm>();
+    stream_cipher::encrypt_in_place::<PacketEncryptionAlgorithm>(
+        &shared_key,
+        &zero_iv,
+        &mut cover_content,
+    );
+
+    // combine it together as follows:
+    // SURB_ACK_FIRST_HOP || SURB_ACK_DATA || EPHEMERAL_KEY || COVER_CONTENT
+    // (note: surb_ack_bytes contains SURB_ACK_FIRST_HOP || SURB_ACK_DATA )
+    let packet_payload: Vec<_> = ack_bytes
+        .into_iter()
+        .chain(ephemeral_keypair.public_key().to_bytes().iter().cloned())
+        .chain(cover_content.into_iter())
+        .collect();
+
+    let route =
+        topology.random_route_to_gateway(rng, DEFAULT_NUM_MIX_HOPS, full_address.gateway())?;
+    let delays = delays::generate_from_average_duration(route.len(), average_packet_delay);
+
+    let client_id_pair = identity::KeyPair::from_bytes(&[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+        &[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]).unwrap();
+    let client_enc_pair = encryption::KeyPair::from_bytes(&[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],
+                                                            &[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]).unwrap();
+
+    let recipient = Recipient::new(
+        *client_id_pair.public_key(),
+        *client_enc_pair.public_key(),
+        *full_address.gateway(),
+    );
+
+    let destination = recipient.as_sphinx_destination();
 
     // once merged, that's an easy rng injection point for sphinx packets : )
     let packet = SphinxPacketBuilder::new()

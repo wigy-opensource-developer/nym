@@ -16,6 +16,7 @@ use nymsphinx::acknowledgements::AckKey;
 use nymsphinx::addressing::clients::Recipient;
 use nymsphinx::chunking::fragment::FragmentIdentifier;
 use nymsphinx::cover::generate_loop_cover_packet;
+use nymsphinx::cover::generate_drop_cover_packet;
 use nymsphinx::forwarding::packet::MixPacket;
 use nymsphinx::params::PacketSize;
 use nymsphinx::preparer::PreparedFragment;
@@ -24,6 +25,7 @@ use rand::{CryptoRng, Rng};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use futures::channel::mpsc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use tokio::time;
@@ -130,6 +132,9 @@ where
 
     /// Report queue lengths so that upstream can backoff sending data, and keep connections open.
     lane_queue_lengths: LaneQueueLengths,
+
+    //counter for drop cover traffic
+    counter_receiver: mpsc::Receiver<u8>,
 }
 
 #[derive(Debug)]
@@ -168,7 +173,7 @@ pub(crate) type BatchRealMessageSender =
 type BatchRealMessageReceiver = tokio::sync::mpsc::Receiver<(Vec<RealMessage>, TransmissionLane)>;
 
 pub(crate) enum StreamMessage {
-    Cover,
+    Cover(bool),
     Real(Box<RealMessage>),
 }
 
@@ -188,6 +193,7 @@ where
         topology_access: TopologyAccessor,
         lane_queue_lengths: LaneQueueLengths,
         client_connection_rx: ConnectionCommandReceiver,
+        counter_receiver: mpsc::Receiver<u8>,
     ) -> Self {
         OutQueueControl {
             config,
@@ -201,6 +207,7 @@ where
             transmission_buffer: TransmissionBuffer::new(),
             client_connection_rx,
             lane_queue_lengths,
+            counter_receiver,
         }
     }
 
@@ -216,7 +223,7 @@ where
         trace!("created new message");
 
         let (next_message, fragment_id) = match next_message {
-            StreamMessage::Cover => {
+            StreamMessage::Cover(drop) => {
                 // TODO for way down the line: in very rare cases (during topology update) we might have
                 // to wait a really tiny bit before actually obtaining the permit hence messing with our
                 // poisson delay, but is it really a problem?
@@ -232,22 +239,40 @@ where
                         return;
                     }
                 };
-
-                (
-                    generate_loop_cover_packet(
-                        &mut self.rng,
-                        topology_ref,
-                        &self.config.ack_key,
-                        &self.config.our_full_destination,
-                        self.config.average_ack_delay,
-                        self.config.average_packet_delay,
-                        self.config.cover_packet_size,
+                if drop  {
+                    debug!("Sending a drop cover message");
+                    (
+                        generate_drop_cover_packet(
+                            &mut self.rng,
+                            topology_ref,
+                            &self.config.ack_key,
+                            &self.config.our_full_destination,
+                            self.config.average_ack_delay,
+                            self.config.average_packet_delay,
+                            self.config.cover_packet_size,
+                        )
+                        .expect(
+                            "Somehow failed to generate a drop cover message with a valid topology",
+                        ),
+                        None,
                     )
-                    .expect(
-                        "Somehow failed to generate a loop cover message with a valid topology",
-                    ),
-                    None,
-                )
+                } else {
+                    (
+                        generate_loop_cover_packet(
+                            &mut self.rng,
+                            topology_ref,
+                            &self.config.ack_key,
+                            &self.config.our_full_destination,
+                            self.config.average_ack_delay,
+                            self.config.average_packet_delay,
+                            self.config.cover_packet_size,
+                        )
+                        .expect(
+                            "Somehow failed to generate a loop cover message with a valid topology",
+                        ),
+                        None,
+                    )
+                }
             }
             StreamMessage::Real(real_message) => {
                 (real_message.mix_packet, Some(real_message.fragment_id))
@@ -331,6 +356,10 @@ where
     }
 
     fn poll_poisson(&mut self, cx: &mut Context<'_>) -> Poll<Option<StreamMessage>> {
+        //For instant drop cover traffic
+        //if let Ok(_) =  self.counter_receiver.try_next() {
+        //    return Poll::Ready(Some(StreamMessage::Cover(true)))
+        //};
         // The average delay could change depending on if backpressure in the downstream channel
         // (mix_tx) was detected.
         self.adjust_current_average_message_sending_delay();
@@ -374,6 +403,7 @@ where
             // in `Vec`, this ensures that on average we will fetch messages faster than we can
             // send, which is a condition for being able to multiplex sphinx packets from multiple
             // data streams.
+            let need_drop = self.counter_receiver.try_next();
             match Pin::new(&mut self.real_receiver).poll_recv(cx) {
                 // in the case our real message channel stream was closed, we should also indicate we are closed
                 // (and whoever is using the stream should panic)
@@ -393,7 +423,11 @@ where
                         Poll::Ready(Some(StreamMessage::Real(Box::new(real_next))))
                     } else {
                         // otherwise construct a dummy one
-                        Poll::Ready(Some(StreamMessage::Cover))
+                        match need_drop {
+                            Ok(_) => Poll::Ready(Some(StreamMessage::Cover(true))),
+                            _ => Poll::Ready(Some(StreamMessage::Cover(false))),
+                        }
+                        
                     }
                 }
             }

@@ -43,6 +43,8 @@ struct ReceivedMessagesBufferInner {
     // but perhaps it should be changed to include timestamps of when the message was reconstructed
     // and every now and then remove ids older than X
     recently_reconstructed: HashSet<i32>,
+    counter_sender: mpsc::Sender<u8>,
+
 }
 
 impl ReceivedMessagesBufferInner {
@@ -51,6 +53,14 @@ impl ReceivedMessagesBufferInner {
             trace!("The message was a loop cover message! Skipping it");
             return None;
         }
+
+        if let Err(err) = self.counter_sender.try_send(1){
+            match err {
+                _ => {
+                    log::debug!("Failed to send counter message");
+                }
+            }
+        };
 
         let fragment = match self.message_receiver.recover_fragment(fragment_data) {
             Err(err) => {
@@ -141,6 +151,7 @@ impl ReceivedMessagesBuffer {
         local_encryption_keypair: Arc<encryption::KeyPair>,
         reply_key_storage: SentReplyKeys,
         reply_controller_sender: ReplyControllerSender,
+        counter_sender :  mpsc::Sender<u8>,
     ) -> Self {
         ReceivedMessagesBuffer {
             inner: Arc::new(Mutex::new(ReceivedMessagesBufferInner {
@@ -149,6 +160,7 @@ impl ReceivedMessagesBuffer {
                 message_receiver: MessageReceiver::new(),
                 message_sender: None,
                 recently_reconstructed: HashSet::new(),
+                counter_sender,
             })),
             reply_key_storage,
             reply_controller_sender,
@@ -472,11 +484,13 @@ impl ReceivedMessagesBufferController {
         mixnet_packet_receiver: MixnetMessageReceiver,
         reply_key_storage: SentReplyKeys,
         reply_controller_sender: ReplyControllerSender,
+        counter_sender: mpsc::Sender<u8>,
     ) -> Self {
         let received_buffer = ReceivedMessagesBuffer::new(
             local_encryption_keypair,
             reply_key_storage,
             reply_controller_sender,
+            counter_sender,
         );
 
         ReceivedMessagesBufferController {
