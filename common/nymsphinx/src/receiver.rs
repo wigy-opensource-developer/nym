@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::message::{NymMessage, NymMessageError, PaddedMessage, PlainMessage};
-use crypto::aes::cipher::{KeyIvInit, StreamCipher};
-use crypto::asymmetric::encryption;
-use crypto::shared_key::recompute_shared_key;
-use crypto::symmetric::stream_cipher;
-use crypto::symmetric::stream_cipher::CipherKey;
-use nymsphinx_anonymous_replies::requests::AnonymousSenderTag;
-use nymsphinx_anonymous_replies::SurbEncryptionKey;
-use nymsphinx_chunking::fragment::Fragment;
-use nymsphinx_chunking::reconstruction::MessageReconstructor;
-use nymsphinx_chunking::ChunkingError;
-use nymsphinx_params::{
+use nym_crypto::aes::cipher::{KeyIvInit, StreamCipher};
+use nym_crypto::asymmetric::encryption;
+use nym_crypto::shared_key::recompute_shared_key;
+use nym_crypto::symmetric::stream_cipher;
+use nym_crypto::symmetric::stream_cipher::CipherKey;
+use nym_sphinx_anonymous_replies::requests::AnonymousSenderTag;
+use nym_sphinx_anonymous_replies::SurbEncryptionKey;
+use nym_sphinx_chunking::fragment::Fragment;
+use nym_sphinx_chunking::reconstruction::MessageReconstructor;
+use nym_sphinx_chunking::ChunkingError;
+use nym_sphinx_params::{
     PacketEncryptionAlgorithm, PacketHkdfAlgorithm, ReplySurbEncryptionAlgorithm,
     DEFAULT_NUM_MIX_HOPS,
 };
@@ -184,10 +184,10 @@ impl Default for MessageReceiver {
 #[cfg(test)]
 mod message_receiver {
     use super::*;
-    use crypto::asymmetric::identity;
-    use mixnet_contract_common::Layer;
+    use nym_crypto::asymmetric::identity;
+    use nym_mixnet_contract_common::Layer;
+    use nym_topology::{gateway, mix, NymTopology};
     use std::collections::HashMap;
-    use topology::{gateway, mix, NymTopology};
 
     // TODO: is it somehow maybe possible to move it to `topology` and have if conditionally
     // available to other modules?

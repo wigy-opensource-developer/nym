@@ -3,10 +3,10 @@
 
 use crate::filter::VersionFilterable;
 use log::warn;
-use mixnet_contract_common::mixnode::MixNodeDetails;
-use mixnet_contract_common::GatewayBond;
-use nymsphinx_addressing::nodes::NodeIdentity;
-use nymsphinx_types::Node as SphinxNode;
+use nym_mixnet_contract_common::mixnode::MixNodeDetails;
+use nym_mixnet_contract_common::GatewayBond;
+use nym_sphinx_addressing::nodes::NodeIdentity;
+use nym_sphinx_types::Node as SphinxNode;
 use rand::Rng;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -19,6 +19,9 @@ use thiserror::Error;
 pub mod filter;
 pub mod gateway;
 pub mod mix;
+
+#[cfg(feature = "provider-trait")]
+pub mod provider_trait;
 
 #[derive(Debug, Clone, Error)]
 pub enum NymTopologyError {
@@ -39,6 +42,16 @@ pub enum NymTopologyError {
 
     #[error("No mixnodes available on layer {layer}")]
     EmptyMixLayer { layer: MixLayer },
+
+    #[error("Uneven layer distribution. Layer {layer} has {nodes} on it, while we expected a value between {lower_bound} and {upper_bound} as we have {total_nodes} nodes in total. Full breakdown: {layer_distribution:?}")]
+    UnevenLayerDistribution {
+        layer: MixLayer,
+        nodes: usize,
+        lower_bound: usize,
+        upper_bound: usize,
+        total_nodes: usize,
+        layer_distribution: Vec<(MixLayer, usize)>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -97,7 +110,7 @@ impl NymTopology {
     }
 
     pub fn num_mixnodes(&self) -> usize {
-        self.mixes.values().flat_map(|m| m.iter()).count()
+        self.mixes.values().map(|m| m.len()).sum()
     }
 
     pub fn mixes_as_vec(&self) -> Vec<mix::Node> {
@@ -238,6 +251,46 @@ impl NymTopology {
         Ok(())
     }
 
+    pub fn ensure_even_layer_distribution(
+        &self,
+        lower_threshold: f32,
+        upper_threshold: f32,
+    ) -> Result<(), NymTopologyError> {
+        let mixnodes_count = self.num_mixnodes();
+
+        let layers = self
+            .mixes
+            .iter()
+            .map(|(k, v)| (*k, v.len()))
+            .collect::<Vec<_>>();
+
+        if self.gateways.is_empty() {
+            return Err(NymTopologyError::NoGatewaysAvailable);
+        }
+
+        if layers.is_empty() {
+            return Err(NymTopologyError::NoMixnodesAvailable);
+        }
+
+        let upper_bound = (mixnodes_count as f32 * upper_threshold) as usize;
+        let lower_bound = (mixnodes_count as f32 * lower_threshold) as usize;
+
+        for (layer, nodes) in &layers {
+            if nodes < &lower_bound || nodes > &upper_bound {
+                return Err(NymTopologyError::UnevenLayerDistribution {
+                    layer: *layer,
+                    nodes: *nodes,
+                    lower_bound,
+                    upper_bound,
+                    total_nodes: mixnodes_count,
+                    layer_distribution: layers,
+                });
+            }
+        }
+
+        Ok(())
+    }
+
     #[must_use]
     pub fn filter_system_version(&self, expected_version: &str) -> Self {
         self.filter_node_versions(expected_version)
@@ -303,10 +356,10 @@ mod converting_mixes_to_vec {
 
     #[cfg(test)]
     mod when_nodes_exist {
-        use crypto::asymmetric::{encryption, identity};
+        use nym_crypto::asymmetric::{encryption, identity};
 
         use super::*;
-        use mixnet_contract_common::Layer;
+        use nym_mixnet_contract_common::Layer;
 
         #[test]
         fn returns_a_vec_with_hashmap_values() {

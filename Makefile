@@ -2,12 +2,12 @@ test: clippy-all cargo-test wasm fmt
 test-all: test cargo-test-expensive
 no-clippy: build cargo-test wasm fmt
 happy: fmt clippy-happy test
-clippy-all: clippy-main clippy-coconut clippy-all-contracts clippy-all-wallet clippy-all-connect clippy-all-wasm-client
-clippy-happy: clippy-happy-main clippy-happy-contracts clippy-happy-wallet clippy-happy-connect
-cargo-test: test-main test-contracts test-wallet test-connect test-coconut test-wasm-client
-cargo-test-expensive: test-main-expensive test-contracts-expensive test-wallet-expensive test-connect-expensive test-coconut-expensive
-build: build-contracts build-wallet build-main build-connect build-wasm-client
-fmt: fmt-main fmt-contracts fmt-wallet fmt-connect fmt-wasm-client
+clippy-all: clippy-main clippy-main-examples clippy-all-contracts clippy-all-wallet clippy-all-connect clippy-all-connect-mobile clippy-all-wasm-client
+clippy-happy: clippy-happy-main clippy-happy-contracts clippy-happy-wallet clippy-happy-connect clippy-happy-connect-mobile
+cargo-test: test-main test-contracts test-wallet test-connect test-connect-mobile
+cargo-test-expensive: test-main-expensive test-contracts-expensive test-wallet-expensive test-connect-expensive
+build: build-contracts build-wallet build-main build-main-examples build-connect build-connect-mobile build-wasm-client
+fmt: fmt-main fmt-contracts fmt-wallet fmt-connect fmt-connect-mobile fmt-wasm-client
 
 clippy-happy-main:
 	cargo clippy
@@ -19,13 +19,16 @@ clippy-happy-wallet:
 	cargo clippy --manifest-path nym-wallet/Cargo.toml
 
 clippy-happy-connect:
-	cargo clippy --manifest-path nym-connect/Cargo.toml
+	cargo clippy --manifest-path nym-connect/desktop/Cargo.toml
+
+clippy-happy-connect-mobile:
+	cargo clippy --manifest-path nym-connect/mobile/src-tauri/Cargo.toml
 
 clippy-main:
 	cargo clippy --workspace -- -D warnings
 
-clippy-coconut:
-	cargo clippy --workspace --features coconut -- -D warnings
+clippy-main-examples:
+	cargo clippy --workspace --examples -- -D warnings
 
 clippy-wasm:
 	cargo clippy --manifest-path clients/webassembly/Cargo.toml --target wasm32-unknown-unknown --workspace -- -D warnings
@@ -38,7 +41,10 @@ clippy-all-wallet:
 	cargo clippy --workspace --manifest-path nym-wallet/Cargo.toml --all-features -- -D warnings
 
 clippy-all-connect:
-	cargo clippy --workspace --manifest-path nym-connect/Cargo.toml --all-features -- -D warnings
+	cargo clippy --workspace --manifest-path nym-connect/desktop/Cargo.toml --all-features -- -D warnings
+
+clippy-all-connect-mobile:
+	cargo clippy --workspace --manifest-path nym-connect/mobile/src-tauri/Cargo.toml --all-features -- -D warnings
 
 clippy-all-wasm-client:
 	cargo clippy --workspace --manifest-path clients/webassembly/Cargo.toml --all-features --target wasm32-unknown-unknown -- -D warnings
@@ -46,15 +52,8 @@ clippy-all-wasm-client:
 test-main:
 	cargo test --workspace
 
-test-coconut:
-	cargo test --workspace --features coconut
-
-
 test-main-expensive:
 	cargo test --workspace -- --ignored
-
-test-coconut-expensive:
-	cargo test --workspace --features coconut -- --ignored
 
 test-contracts:
 	cargo test --manifest-path contracts/Cargo.toml --all-features
@@ -68,17 +67,23 @@ test-wallet:
 test-wallet-expensive:
 	cargo test --manifest-path nym-wallet/Cargo.toml --all-features -- --ignored
 
-test-wasm-client:
-	cargo test --workspace --manifest-path clients/webassembly/Cargo.toml --all-features
-
 test-connect:
-	cargo test --manifest-path nym-connect/Cargo.toml --all-features
+	cargo test --manifest-path nym-connect/desktop/Cargo.toml --all-features
 
 test-connect-expensive:
-	cargo test --manifest-path nym-connect/Cargo.toml --all-features -- --ignored
+	cargo test --manifest-path nym-connect/desktop/Cargo.toml --all-features -- --ignored
+
+test-connect-mobile:
+	cargo test --manifest-path nym-connect/mobile/src-tauri/Cargo.toml --all-features
+
+test-connect-mobile-expensive:
+	cargo test --manifest-path nym-connect/mobile/src-tauri/Cargo.toml --all-features -- --ignored
 
 build-main:
 	cargo build --workspace
+
+build-main-examples:
+	cargo build --workspace --examples
 
 build-contracts:
 	cargo build --manifest-path contracts/Cargo.toml --workspace
@@ -87,7 +92,10 @@ build-wallet:
 	cargo build --manifest-path nym-wallet/Cargo.toml --workspace
 
 build-connect:
-	cargo build --manifest-path nym-connect/Cargo.toml --workspace
+	cargo build --manifest-path nym-connect/desktop/Cargo.toml --workspace
+
+build-connect-mobile:
+	cargo build --manifest-path nym-connect/mobile/src-tauri/Cargo.toml --workspace
 
 build-explorer-api:
 	cargo build --manifest-path explorer-api/Cargo.toml --workspace
@@ -108,13 +116,18 @@ fmt-wallet:
 	cargo fmt --manifest-path nym-wallet/Cargo.toml --all
 
 fmt-connect:
-	cargo fmt --manifest-path nym-connect/Cargo.toml --all
+	cargo fmt --manifest-path nym-connect/desktop/Cargo.toml --all
+
+fmt-connect-mobile:
+	cargo fmt --manifest-path nym-connect/mobile/src-tauri/Cargo.toml --all
 
 fmt-wasm-client:
 	cargo fmt --manifest-path clients/webassembly/Cargo.toml --all
 
 wasm:
 	RUSTFLAGS='-C link-arg=-s' cargo build --manifest-path contracts/Cargo.toml --release --target wasm32-unknown-unknown
+	wasm-opt -Os contracts/target/wasm32-unknown-unknown/release/vesting_contract.wasm -o contracts/target/wasm32-unknown-unknown/release/vesting_contract.wasm
+	wasm-opt -Os contracts/target/wasm32-unknown-unknown/release/mixnet_contract.wasm -o contracts/target/wasm32-unknown-unknown/release/mixnet_contract.wasm
 
 mixnet-opt: wasm
 	cd contracts/mixnet && make opt
@@ -122,3 +135,6 @@ mixnet-opt: wasm
 generate-typescript:
 	cd tools/ts-rs-cli && cargo run && cd ../..
 	yarn types:lint:fix
+
+run-api-tests:
+	cd nym-api/tests/functional_test && yarn test:qa

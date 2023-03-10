@@ -7,5 +7,9 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nymsphinx-addressing = { path = "../../../common/nymsphinx/addressing" }
-thiserror = "1"
+thiserror = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+
+nym-sphinx-addressing = { path = "../../../common/nymsphinx/addressing" }
+service-providers-common = { path = "../../../service-providers/common" }

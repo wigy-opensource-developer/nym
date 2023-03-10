@@ -15,9 +15,9 @@ use coconut_dkg_common::msg::QueryMsg::GetVerificationKeys;
 use coconut_dkg_common::verification_key::PagedVKSharesResponse;
 use cosmwasm_std::{coins, Addr, Decimal};
 use cw4::Member;
-use cw4_group::msg::InstantiateMsg as GroupInstantiateMsg;
 use cw_multi_test::Executor;
 use cw_utils::{Duration, Threshold};
+use group_contract_common::msg::InstantiateMsg as GroupInstantiateMsg;
 use multisig_contract_common::msg::ExecuteMsg::{Execute, Vote};
 use multisig_contract_common::msg::InstantiateMsg as MultisigInstantiateMsg;
 
@@ -71,6 +71,7 @@ fn dkg_proposal() {
     let msg = DkgInstantiateMsg {
         group_addr: group_contract_addr.to_string(),
         multisig_addr: multisig_contract_addr.to_string(),
+        time_configuration: None,
         mix_denom: TEST_COIN_DENOM.to_string(),
     };
     let coconut_dkg_contract_addr = app
@@ -102,6 +103,7 @@ fn dkg_proposal() {
         &RegisterDealer {
             bte_key_with_proof: "bte_key_with_proof".to_string(),
             announce_address: "127.0.0.1:8000".to_string(),
+            resharing: false,
         },
         &vec![],
     )
@@ -123,6 +125,7 @@ fn dkg_proposal() {
 
     let msg = CommitVerificationKeyShare {
         share: "share".to_string(),
+        resharing: false,
     };
     let res = app
         .execute_contract(
@@ -151,6 +154,7 @@ fn dkg_proposal() {
         .query_wasm_smart(
             coconut_dkg_contract_addr.clone(),
             &GetVerificationKeys {
+                epoch_id: 0,
                 limit: None,
                 start_after: None,
             },
@@ -198,6 +202,7 @@ fn dkg_proposal() {
         .query_wasm_smart(
             coconut_dkg_contract_addr,
             &GetVerificationKeys {
+                epoch_id: 0,
                 limit: None,
                 start_after: None,
             },

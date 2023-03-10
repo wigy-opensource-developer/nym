@@ -3,7 +3,7 @@ use crate::errors::ContractError;
 use crate::storage::{
     load_balance, load_bond_pledge, load_gateway_pledge, load_withdrawn, remove_bond_pledge,
     remove_delegation, remove_gateway_pledge, save_account, save_balance, save_bond_pledge,
-    save_gateway_pledge, save_withdrawn, BlockTimestampSecs, DELEGATIONS, KEY,
+    save_gateway_pledge, save_withdrawn, AccountStorageKey, BlockTimestampSecs, DELEGATIONS, KEY,
 };
 use crate::traits::VestingAccount;
 use cosmwasm_std::{Addr, Coin, Order, Storage, Timestamp, Uint128};
@@ -19,7 +19,7 @@ mod mixnode_bonding_account;
 mod node_families;
 mod vesting_account;
 
-fn generate_storage_key(storage: &mut dyn Storage) -> Result<u32, ContractError> {
+fn generate_storage_key(storage: &mut dyn Storage) -> Result<AccountStorageKey, ContractError> {
     let key = KEY.may_load(storage)?.unwrap_or(0) + 1;
     KEY.save(storage, &key)?;
     Ok(key)
@@ -32,7 +32,7 @@ pub struct Account {
     pub start_time: Timestamp,
     pub periods: Vec<VestingPeriod>,
     pub coin: Coin,
-    storage_key: u32,
+    storage_key: AccountStorageKey,
     #[serde(default)]
     pub pledge_cap: Option<PledgeCap>,
 }
@@ -61,6 +61,36 @@ impl Account {
         save_account(&account, storage)?;
         account.save_balance(amount, storage)?;
         Ok(account)
+    }
+
+    /// Checks whether the additional stake would be within the cap associated with the account
+    /// and whether the account has enough tokens for staking.
+    /// Returns the value of the current balance of the account.
+    pub fn ensure_valid_additional_stake(
+        &self,
+        additional_stake: &Coin,
+        storage: &dyn Storage,
+    ) -> Result<Uint128, ContractError> {
+        let current_balance = self.load_balance(storage)?;
+        let current_total_staked = self.total_staked(storage)?;
+        let total_staked_after = current_total_staked + additional_stake.amount;
+        let locked_pledge_cap = self.absolute_pledge_cap()?;
+
+        if locked_pledge_cap < total_staked_after {
+            return Err(ContractError::LockedPledgeCapReached {
+                current: total_staked_after,
+                cap: locked_pledge_cap,
+            });
+        }
+
+        if current_balance < additional_stake.amount {
+            return Err(ContractError::InsufficientBalance(
+                self.owner_address().as_str().to_string(),
+                current_balance.u128(),
+            ));
+        }
+
+        Ok(current_balance)
     }
 
     pub fn pledge_cap(&self) -> PledgeCap {
@@ -293,12 +323,27 @@ impl Account {
             .fold(Uint128::zero(), |acc, (_key, val)| acc + val))
     }
 
+    // TODO: this should get reworked... somehow... (maybe with a memoized value?)
+    // as it's an unbounded iteration that could fail if an account has made a lot of delegations
+    // (I guess in order of thousands)
     pub fn total_delegations(&self, storage: &dyn Storage) -> Result<Uint128, ContractError> {
         Ok(DELEGATIONS
             .sub_prefix(self.storage_key())
             .range(storage, None, None, Order::Ascending)
             .filter_map(|x| x.ok())
             .fold(Uint128::zero(), |acc, (_key, val)| acc + val))
+    }
+
+    pub fn total_pledged(&self, storage: &dyn Storage) -> Result<Uint128, ContractError> {
+        let amount = if let Some(bond) = self
+            .load_mixnode_pledge(storage)?
+            .or(self.load_gateway_pledge(storage)?)
+        {
+            bond.amount().amount
+        } else {
+            Uint128::zero()
+        };
+        Ok(amount)
     }
 
     pub fn total_delegations_at_timestamp(
