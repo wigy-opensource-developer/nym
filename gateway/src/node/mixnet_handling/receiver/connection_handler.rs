@@ -10,6 +10,7 @@ use futures::StreamExt;
 use log::*;
 use mixnet_client::forwarder::MixForwardingSender;
 use mixnode_common::packet_processor::processor::ProcessedFinalHop;
+use mixnode_common::packet_processor::replay_detection::ReplayDetector;
 use nym_sphinx::forwarding::packet::MixPacket;
 use nym_sphinx::framing::codec::SphinxCodec;
 use nym_sphinx::framing::packet::FramedSphinxPacket;
@@ -27,6 +28,7 @@ pub(crate) struct ConnectionHandler<St: Storage> {
     // at this point.
     // keep the following in mind: each action on ActiveClientsStore requires going through RwLock
     // and each `get` internally copies the channel, however, is it really that expensive?
+    replay_detector: ReplayDetector,
     clients_store_cache: HashMap<DestinationAddressBytes, MixMessageSender>,
     active_clients_store: ActiveClientsStore,
     storage: St,
@@ -49,6 +51,7 @@ impl<St: Storage + Clone> Clone for ConnectionHandler<St> {
             active_clients_store: self.active_clients_store.clone(),
             storage: self.storage.clone(),
             ack_sender: self.ack_sender.clone(),
+            replay_detector : self.replay_detector.clone(),
         }
     }
 }
@@ -66,6 +69,7 @@ impl<St: Storage> ConnectionHandler<St> {
             storage,
             active_clients_store,
             ack_sender,
+            replay_detector : ReplayDetector::new(),
         }
     }
 
@@ -161,6 +165,10 @@ impl<St: Storage> ConnectionHandler<St> {
         // packet processor for vpn packets,
         // question: can it also be per connection vs global?
         //
+        if self.replay_detector.handle_secret(framed_sphinx_packet.shared_secret().to_vec()){
+            warn!("We have already processed this packet, it will be dropped");
+            return;
+        };
 
         let processed_final_hop = match self.packet_processor.process_received(framed_sphinx_packet)
         {
