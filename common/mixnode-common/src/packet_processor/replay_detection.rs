@@ -71,3 +71,39 @@ impl ReplayDetectorInner {
         self.set.push(secret)
     }
 }
+
+#[cfg(test)]
+mod replay_detector_test {
+    use super::*;
+
+    #[test]
+    fn lookup_after_insert_returns_true() {
+        let replay_detector = ReplayDetector::new();
+        let secret = b"Hello World!".to_vec();
+        replay_detector.insert(secret.clone().into());
+        assert!(replay_detector.lookup(&secret));
+    }
+
+    #[test]
+    fn lookup_new_value_returns_false() {
+        let replay_detector = ReplayDetector::new();
+        let secret = b"Hello World!".to_vec();
+        assert!(!replay_detector.lookup(&secret));
+    }
+
+    #[test]
+    fn handle_secret_correctly_detects_replay() {
+        let replay_detector = ReplayDetector::new();
+        let secret = b"Hello World!".to_vec();
+        replay_detector.insert(secret.clone());
+        assert!(replay_detector.handle_secret(secret));
+    }
+
+    #[test]
+    fn handle_secret_correctly_handle_new_secret() {
+        let replay_detector = ReplayDetector::new();
+        let secret = b"Hello World!".to_vec();
+        assert!(!replay_detector.handle_secret(secret.clone()));
+        assert!(replay_detector.lookup(&secret));
+    }
+}
