@@ -127,8 +127,8 @@ impl RewardedSetUpdater {
         }
 
         // Reward all the nodes in the still current, soon to be previous rewarded set
-        //log::info!("Rewarding the current rewarded set...");
-        //self.reward_current_rewarded_set(interval).await?;
+        log::info!("Rewarding the current rewarded set...");
+        self.reward_current_rewarded_set(interval).await?;
 
         // note: those operations don't really have to be atomic, so it's fine to send them
         // as separate transactions
