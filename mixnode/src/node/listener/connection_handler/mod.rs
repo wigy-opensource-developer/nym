@@ -4,6 +4,7 @@
 use crate::node::listener::connection_handler::packet_processing::{
     MixProcessingResult, PacketProcessor,
 };
+use mixnode_common::packet_processor::replay_detection::ReplayDetector;
 use crate::node::packet_delayforwarder::PacketDelayForwardSender;
 use crate::node::TaskClient;
 use futures::StreamExt;
@@ -23,6 +24,7 @@ pub(crate) mod packet_processing;
 pub(crate) struct ConnectionHandler {
     packet_processor: PacketProcessor,
     delay_forwarding_channel: PacketDelayForwardSender,
+    replay_detector: ReplayDetector,
 }
 
 impl ConnectionHandler {
@@ -33,6 +35,7 @@ impl ConnectionHandler {
         ConnectionHandler {
             packet_processor,
             delay_forwarding_channel,
+            replay_detector : ReplayDetector::new(),
         }
     }
 
@@ -54,7 +57,10 @@ impl ConnectionHandler {
         // packet processor for vpn packets,
         // question: can it also be per connection vs global?
         //
-
+        if self.replay_detector.handle_secret(framed_sphinx_packet.shared_secret().to_vec()){
+            warn!("We have already processed this packet, it will be dropped");
+            return;
+        };
         // all processing such, key caching, etc. was done.
         // however, if it was a forward hop, we still need to delay it
         match self.packet_processor.process_received(framed_sphinx_packet) {
