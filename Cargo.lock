@@ -1141,6 +1141,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "cuckoofilter"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b810a8449931679f64cd7eef1bbd0fa315801b6d5d9cdc1ace2804d6529eee18"
+dependencies = [
+ "byteorder",
+ "fnv",
+ "rand 0.7.3",
+]
+
+[[package]]
 name = "cupid"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1653,6 +1664,24 @@ dependencies = [
  "indenter",
  "once_cell",
 ]
+
+[[package]]
+name = "fastbloom-rs"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f04c5562065adb6d23e97f342cb73a73ed94ebfdb8d96a92a85d6fb93f1cdfed"
+dependencies = [
+ "cuckoofilter",
+ "fastmurmur3",
+ "xorfilter-rs",
+ "xxhash-rust",
+]
+
+[[package]]
+name = "fastmurmur3"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d922f481ae01f2a3f1fff7b9e0e789f18f0c755a38ec983a3e6f37762cdcc2a2"
 
 [[package]]
 name = "fastrand"
@@ -2916,6 +2945,7 @@ name = "mixnode-common"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "fastbloom-rs",
  "futures",
  "humantime-serde",
  "log",
@@ -7187,6 +7217,18 @@ dependencies = [
  "serde",
  "zeroize",
 ]
+
+[[package]]
+name = "xorfilter-rs"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47f9da296a88b6bc150b896d17770a62d4dc6f63ecf0ed10a9c08a1cb3d12f24"
+
+[[package]]
+name = "xxhash-rust"
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "735a71d46c4d68d71d4b24d03fdc2b98e38cea81730595801db779c04fe80d70"
 
 [[package]]
 name = "yansi"

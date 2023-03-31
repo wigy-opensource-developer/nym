@@ -41,8 +41,8 @@ impl FramedSphinxPacket {
         self.header.packet_mode
     }
 
-    pub fn shared_secret(&self) -> Vec<u8> {
-        self.packet.header.shared_secret.as_bytes().to_vec()
+    pub fn shared_secret(&self) -> &[u8] {
+        self.packet.header.shared_secret.as_bytes()
     }
 
     pub fn into_inner(self) -> SphinxPacket {

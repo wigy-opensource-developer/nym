@@ -57,7 +57,7 @@ impl ConnectionHandler {
         // packet processor for vpn packets,
         // question: can it also be per connection vs global?
         //
-        if self.replay_detector.handle_secret(framed_sphinx_packet.shared_secret().to_vec()){
+        if self.replay_detector.handle_secret(framed_sphinx_packet.shared_secret()){
             warn!("We have already processed this packet, it will be dropped");
             return;
         };
