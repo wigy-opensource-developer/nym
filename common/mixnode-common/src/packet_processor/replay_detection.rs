@@ -1,7 +1,7 @@
 // Copyright 2023 - Nym Technologies SA <contact@nymtech.net>
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use fastbloom_rs::{BloomFilter, FilterBuilder, Membership};
 
 
@@ -12,11 +12,11 @@ const FP_RATE : f64 = 1e-4;
 type GroupElement = [u8];
 
 #[derive(Clone, Debug)]
-pub struct ReplayDetector(Arc<RwLock<ReplayDetectorInner>>);
+pub struct ReplayDetector(Arc<Mutex<ReplayDetectorInner>>);
 
 impl ReplayDetector {
     pub fn new() -> Self {
-        ReplayDetector(Arc::new(RwLock::new(
+        ReplayDetector(Arc::new(Mutex::new(
             ReplayDetectorInner::new(),
         )))
     }
@@ -25,31 +25,21 @@ impl ReplayDetector {
     //if yes, return True
     //if no, add the secret to the list, then return false
     pub fn handle_secret(&self, secret : &GroupElement) -> bool {
-        let seen = self.lookup(secret);
-        if !seen {
-            self.insert(secret);
-        }
-        seen
-    }
-
-    pub fn lookup(&self, secret : &GroupElement) -> bool {
-        match self.0.read() {
-            Ok(inner) => {
-                inner.lookup(secret)
-            }
+        match self.0.lock() {
+            Ok(mut inner) => {
+                let seen = inner.lookup(&secret);
+                if !seen {
+                    inner.insert(secret);
+                }
+                seen
+            },
             Err(err) => {
-                log::warn!("Failed to lookup secret : {err}");
+                log::warn!("Failed to handle secret : {err}");
                 false
             }
         }
     }
 
-    pub fn insert(&self, secret : &GroupElement) {
-        match self.0.write() {
-            Ok(mut inner) => inner.insert(secret),
-            Err(err) => log::warn!("Failed to insert secret : {err}")
-        }
-    }
 
 }
 
@@ -85,25 +75,10 @@ mod replay_detector_test {
     use super::*;
 
     #[test]
-    fn lookup_after_insert_returns_true() {
-        let replay_detector = ReplayDetector::new();
-        let secret = b"Hello World!";
-        replay_detector.insert(secret);
-        assert!(replay_detector.lookup(secret));
-    }
-
-    #[test]
-    fn lookup_new_value_returns_false() {
-        let replay_detector = ReplayDetector::new();
-        let secret = b"Hello World!";
-        assert!(!replay_detector.lookup(secret));
-    }
-
-    #[test]
     fn handle_secret_correctly_detects_replay() {
         let replay_detector = ReplayDetector::new();
         let secret = b"Hello World!";
-        replay_detector.insert(secret);
+        replay_detector.handle_secret(secret);
         assert!(replay_detector.handle_secret(secret));
     }
 
@@ -112,6 +87,5 @@ mod replay_detector_test {
         let replay_detector = ReplayDetector::new();
         let secret = b"Hello World!";
         assert!(!replay_detector.handle_secret(secret));
-        assert!(replay_detector.lookup(secret));
     }
 }
