@@ -3,13 +3,14 @@
 
 use std::sync::{Arc, Mutex};
 use fastbloom_rs::{BloomFilter, FilterBuilder, Membership};
+use crate::packet_processor::error::MixProcessingError;
 
 
 const BLOOM_FILTER_SIZE : u64 = 10_000_000;
 const FP_RATE : f64 = 1e-4;
 
 //alias for convenience
-type GroupElement = [u8];
+type ReplayTag = [u8];
 
 #[derive(Clone, Debug)]
 pub struct ReplayDetector(Arc<Mutex<ReplayDetectorInner>>);
@@ -24,18 +25,19 @@ impl ReplayDetector {
     //check if secret has been seen already
     //if yes, return True
     //if no, add the secret to the list, then return false
-    pub fn handle_secret(&self, secret : &GroupElement) -> bool {
+    pub fn handle_replay_tag(&self, secret : &ReplayTag) -> Result<(), MixProcessingError> {
         match self.0.lock() {
             Ok(mut inner) => {
-                let seen = inner.lookup(&secret);
-                if !seen {
+                if !inner.lookup(&secret) {
                     inner.insert(secret);
+                    Ok(())
+                } else {
+                    Err(MixProcessingError::ReplayedPacketDetected)
                 }
-                seen
             },
             Err(err) => {
                 log::warn!("Failed to handle secret : {err}");
-                false
+                Ok(()) //what is the sensible thing to do, if we can't get the lock somehow?
             }
         }
     }
@@ -54,18 +56,18 @@ struct ReplayDetectorInner {
     filter : BloomFilter,
 }
 
-impl ReplayDetectorInner { //SW TODO: see if we can lookup and insert at the same time
+impl ReplayDetectorInner { //SW TODO: see if we can lookup and insert at the same time. Update, we can, but we have to implement it in the library
 
     pub fn new() -> Self {
         ReplayDetectorInner {
             filter : FilterBuilder::new(BLOOM_FILTER_SIZE, FP_RATE).build_bloom_filter(),
         }
     }
-    pub fn lookup(&self, secret : &GroupElement) -> bool {
+    pub fn lookup(&self, secret : &ReplayTag) -> bool {
         self.filter.contains(secret)
     }
 
-    pub fn insert(&mut self, secret : &GroupElement) {
+    pub fn insert(&mut self, secret : &ReplayTag) {
         self.filter.add(secret)
     }
 }
@@ -75,17 +77,17 @@ mod replay_detector_test {
     use super::*;
 
     #[test]
-    fn handle_secret_correctly_detects_replay() {
+    fn handle_replay_tag_correctly_detects_replay() {
         let replay_detector = ReplayDetector::new();
         let secret = b"Hello World!";
-        replay_detector.handle_secret(secret);
-        assert!(replay_detector.handle_secret(secret));
+        replay_detector.handle_replay_tag(secret);
+        assert_eq!(Err(MixProcessingError::ReplayedPacketDetected), replay_detector.handle_replay_tag(secret));
     }
 
     #[test]
-    fn handle_secret_correctly_handle_new_secret() {
+    fn handle_replay_tag_correctly_handle_new_tag() {
         let replay_detector = ReplayDetector::new();
         let secret = b"Hello World!";
-        assert!(!replay_detector.handle_secret(secret));
+        assert_ok!(replay_detector.handle_replay_tag(secret));
     }
 }

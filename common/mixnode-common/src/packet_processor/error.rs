@@ -22,4 +22,7 @@ pub enum MixProcessingError {
 
     #[error("the received packet was set to use the very old and very much deprecated 'VPN' mode")]
     ReceivedOldTypeVpnPacket,
+
+    #[error("this packet was already processed, it's a replay")]
+    ReplayedPacketDetected,
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::packet_processor::error::MixProcessingError;
+use crate::packet_processor::replay_detection::ReplayDetector;
 use log::*;
 use nym_sphinx_acknowledgements::surb_ack::SurbAck;
 use nym_sphinx_addressing::nodes::NymNodeRoutingAddress;
@@ -35,6 +36,9 @@ pub enum MixProcessingResult {
 pub struct SphinxPacketProcessor {
     /// Private sphinx key of this node required to unwrap received sphinx packet.
     sphinx_key: Arc<PrivateKey>,
+
+    /// Detector of replay attack
+    replay_detector: ReplayDetector,
 }
 
 impl SphinxPacketProcessor {
@@ -42,6 +46,7 @@ impl SphinxPacketProcessor {
     pub fn new(sphinx_key: PrivateKey) -> Self {
         SphinxPacketProcessor {
             sphinx_key: Arc::new(sphinx_key),
+            replay_detector: ReplayDetector::new(),
         }
     }
 
@@ -175,6 +180,9 @@ impl SphinxPacketProcessor {
         // explicit packet size will help to correctly parse final hop
         let packet_size = received.packet_size();
         let packet_mode = received.packet_mode();
+
+        //check for replay attack
+        self.replay_detector.handle_replay_tag(received.shared_secret())?;
 
         // unwrap the sphinx packet and if possible and appropriate, cache keys
         let processed_packet = self.perform_initial_unwrapping(received)?;
