@@ -162,12 +162,12 @@ impl SphinxPacketProcessor {
         packet_mode: PacketMode,
     ) -> Result<MixProcessingResult, MixProcessingError> {
         match packet {
-            ProcessedPacket::ForwardHop(packet, address, delay) => {
+            ProcessedPacket::ForwardHop(packet, address, delay, _) => {
                 self.process_forward_hop(*packet, address, delay, packet_mode)
             }
             // right now there's no use for the surb_id included in the header - probably it should get removed from the
             // sphinx all together?
-            ProcessedPacket::FinalHop(destination, _, payload) => {
+            ProcessedPacket::FinalHop(destination, _, payload, _) => {
                 self.process_final_hop(destination, payload, packet_size, packet_mode)
             }
         }
@@ -181,11 +181,11 @@ impl SphinxPacketProcessor {
         let packet_size = received.packet_size();
         let packet_mode = received.packet_mode();
 
-        //check for replay attack
-        self.replay_detector.handle_replay_tag(received.shared_secret())?;
-
         // unwrap the sphinx packet and if possible and appropriate, cache keys
         let processed_packet = self.perform_initial_unwrapping(received)?;
+
+        //check for replay attack
+        self.replay_detector.handle_replay_tag(&processed_packet.replay_tag())?;
 
         // for forward packets, extract next hop and set delay (but do NOT delay here)
         // for final packets, extract SURBAck
