@@ -23,13 +23,12 @@ impl ReplayDetector {
     }
 
     //check if secret has been seen already
-    //if yes, return True
-    //if no, add the secret to the list, then return false
+    //if yes, return Ok
+    //if no, add the secret to the list, then return an error
     pub fn handle_replay_tag(&self, secret : &ReplayTag) -> Result<(), MixProcessingError> {
         match self.0.lock() {
             Ok(mut inner) => {
-                if !inner.lookup(&secret) {
-                    inner.insert(secret);
+                if !inner.lookup_then_insert(secret) {
                     Ok(())
                 } else {
                     Err(MixProcessingError::ReplayedPacketDetected)
@@ -37,7 +36,7 @@ impl ReplayDetector {
             },
             Err(err) => {
                 log::warn!("Failed to handle secret : {err}");
-                Ok(()) //what is the sensible thing to do, if we can't get the lock somehow?
+                Ok(()) //what is the sensible thing to do, if the lock is poisoned? Reset the filter ? 
             }
         }
     }
@@ -56,19 +55,16 @@ struct ReplayDetectorInner {
     filter : BloomFilter,
 }
 
-impl ReplayDetectorInner { //SW TODO: see if we can lookup and insert at the same time. Update, we can, but we have to implement it in the library
+impl ReplayDetectorInner {
 
     pub fn new() -> Self {
         ReplayDetectorInner {
             filter : FilterBuilder::new(BLOOM_FILTER_SIZE, FP_RATE).build_bloom_filter(),
         }
     }
-    pub fn lookup(&self, secret : &ReplayTag) -> bool {
-        self.filter.contains(secret)
-    }
 
-    pub fn insert(&mut self, secret : &ReplayTag) {
-        self.filter.add(secret)
+    pub fn lookup_then_insert(&mut self, secret : &ReplayTag) -> bool {
+        self.filter.contains_then_add(secret)
     }
 }
 
