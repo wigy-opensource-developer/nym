@@ -18,24 +18,24 @@ pub struct ReplayDetector(Arc<Mutex<ReplayDetectorInner>>);
 impl ReplayDetector {
     pub fn new() -> Self {
         ReplayDetector(Arc::new(Mutex::new(
-            ReplayDetectorInner::new(),
+            ReplayDetectorInner::new()
         )))
     }
 
     //check if secret has been seen already
     //if yes, return Ok
     //if no, add the secret to the list, then return an error
-    pub fn handle_replay_tag(&self, secret : &ReplayTag) -> Result<(), MixProcessingError> {
+    pub fn handle_replay_tag(&self, replay_tag : &ReplayTag) -> Result<(), MixProcessingError> {
         match self.0.lock() {
             Ok(mut inner) => {
-                if !inner.lookup_then_insert(secret) {
+                if !inner.lookup_then_insert(replay_tag) {
                     Ok(())
                 } else {
                     Err(MixProcessingError::ReplayedPacketDetected)
                 }
             },
             Err(err) => {
-                log::warn!("Failed to handle secret : {err}");
+                log::warn!("Failed to handle replay_tag : {err}");
                 Ok(()) //what is the sensible thing to do, if the lock is poisoned? Reset the filter ? 
             }
         }
@@ -63,8 +63,8 @@ impl ReplayDetectorInner {
         }
     }
 
-    pub fn lookup_then_insert(&mut self, secret : &ReplayTag) -> bool {
-        self.filter.contains_then_add(secret)
+    pub fn lookup_then_insert(&mut self, replay_tag : &ReplayTag) -> bool {
+        self.filter.contains_then_add(replay_tag)
     }
 }
 
@@ -75,15 +75,15 @@ mod replay_detector_test {
     #[test]
     fn handle_replay_tag_correctly_detects_replay() {
         let replay_detector = ReplayDetector::new();
-        let secret = b"Hello World!";
-        replay_detector.handle_replay_tag(secret);
-        assert_eq!(Err(MixProcessingError::ReplayedPacketDetected), replay_detector.handle_replay_tag(secret));
+        let replay_tag = b"Hello World!";
+        replay_detector.handle_replay_tag(replay_tag);
+        assert_eq!(Err(MixProcessingError::ReplayedPacketDetected), replay_detector.handle_replay_tag(replay_tag));
     }
 
     #[test]
     fn handle_replay_tag_correctly_handle_new_tag() {
         let replay_detector = ReplayDetector::new();
-        let secret = b"Hello World!";
-        assert_ok!(replay_detector.handle_replay_tag(secret));
+        let replay_tag = b"Hello World!";
+        assert_ok!(replay_detector.handle_replay_tag(replay_tag));
     }
 }
