@@ -17,7 +17,7 @@ tokio = { version = "1.24.1", features = ["time", "macros", "rt", "net", "io-uti
 tokio-util = { version = "0.7.4", features = ["codec"] }
 url = "2.2"
 thiserror = "1.0.37"
-fastbloom-rs = "0.5.3"
+fastbloom-rs = { git = "https://github.com/simonwicky/fastbloom"}
 
 nym-crypto =  { path = "../crypto" }
 nym-network-defaults = { path = "../network-defaults" }
