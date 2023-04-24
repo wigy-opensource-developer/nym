@@ -59,6 +59,15 @@ impl NymApiTopologyProvider {
     }
 
     async fn get_current_compatible_topology(&mut self) -> Option<NymTopology> {
+
+        let epoch = match self.validator_client.get_cached_current_epoch().await {
+            Err(err) => {
+                error!("failed to get current epoch - {err}");
+                return None;
+            }
+            Ok(interval) => interval.current_epoch_id(),
+        };
+
         let mixnodes = match self.validator_client.get_cached_active_mixnodes().await {
             Err(err) => {
                 error!("failed to get network mixnodes - {err}");
@@ -75,7 +84,22 @@ impl NymApiTopologyProvider {
             Ok(gateways) => gateways,
         };
 
-        let topology = nym_topology_from_detailed(mixnodes, gateways)
+        //there is a slight chance that the epoch changed between the epoch fetching and the topology fetching
+        //we thus need to check it didn't, otherwise, encryption keys will not match the one the mixnodes will try to decrypt with
+        //if indeed the epoch changed, we can return a failure. The old topology will be used for a little while, no problem to that
+        match self.validator_client.get_cached_current_epoch().await {
+            Err(err) => {
+                error!("failed to get current epoch a second time - {err}");
+                return None;
+            }
+            Ok(interval) => {
+                if interval.current_epoch_id() != epoch { //epoch changed indeed
+                    return None;
+                }
+            }
+        }
+
+        let topology = nym_topology_from_detailed(mixnodes, gateways, epoch)
             .filter_system_version(&self.client_version);
 
         if let Err(err) = self.check_layer_distribution(&topology) {

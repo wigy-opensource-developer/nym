@@ -6,6 +6,7 @@ use crate::network_monitor::ROUTE_TESTING_TEST_NONCE;
 use nym_crypto::asymmetric::identity;
 use nym_topology::{gateway, mix, NymTopology};
 use std::fmt::{Debug, Formatter};
+use nym_mixnet_contract_common::EpochId;
 
 #[derive(Clone)]
 pub(crate) struct TestRoute {
@@ -22,6 +23,7 @@ impl TestRoute {
         l2_mix: mix::Node,
         l3_mix: mix::Node,
         gateway: gateway::Node,
+        epoch: EpochId,
     ) -> Self {
         let layered_mixes = [
             (1u8, vec![l1_mix]),
@@ -34,7 +36,7 @@ impl TestRoute {
         TestRoute {
             id,
             system_version: system_version.to_string(),
-            nodes: NymTopology::new(layered_mixes, vec![gateway]),
+            nodes: NymTopology::new(layered_mixes, vec![gateway], epoch),
         }
     }
 

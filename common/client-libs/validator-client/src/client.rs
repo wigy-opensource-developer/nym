@@ -11,7 +11,7 @@ use nym_api_requests::models::{
 };
 use nym_coconut_dkg_common::types::NodeIndex;
 use nym_coconut_interface::VerificationKey;
-pub use nym_mixnet_contract_common::{mixnode::MixNodeDetails, GatewayBond, IdentityKeyRef, MixId};
+pub use nym_mixnet_contract_common::{mixnode::MixNodeDetails, GatewayBond, IdentityKeyRef, MixId, Interval};
 
 #[cfg(feature = "nyxd-client")]
 use crate::nyxd::traits::{DkgQueryClient, MixnetQueryClient, MultisigQueryClient};
@@ -921,6 +921,10 @@ impl NymApiClient {
             .nym_api_client
             .get_mixnode_stake_saturation(mix_id)
             .await?)
+    }
+
+    pub async fn get_cached_current_epoch(&self) -> Result<Interval, ValidatorClientError> {
+        Ok(self.nym_api_client.get_current_epoch().await?)
     }
 
     pub async fn blind_sign(

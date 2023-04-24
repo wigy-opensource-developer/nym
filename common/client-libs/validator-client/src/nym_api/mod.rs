@@ -14,7 +14,7 @@ use nym_api_requests::models::{
     UptimeResponse,
 };
 use nym_mixnet_contract_common::mixnode::MixNodeDetails;
-use nym_mixnet_contract_common::{GatewayBond, IdentityKeyRef, MixId};
+use nym_mixnet_contract_common::{GatewayBond, IdentityKeyRef, MixId, Interval};
 use reqwest::Response;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -445,6 +445,13 @@ impl Client {
             NO_PARAMS,
         )
         .await
+    }
+
+    pub async fn get_current_epoch(&self) -> Result<Interval, NymAPIError> {
+        self.query_nym_api(
+            &[routes::API_VERSION, routes::EPOCH, routes::CURRENT],
+            NO_PARAMS,
+        ).await
     }
 
     pub async fn blind_sign(

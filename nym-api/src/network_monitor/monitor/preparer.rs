@@ -8,7 +8,7 @@ use crate::network_monitor::test_route::TestRoute;
 use crate::nym_contract_cache::cache::NymContractCache;
 use log::info;
 use nym_crypto::asymmetric::{encryption, identity};
-use nym_mixnet_contract_common::{Addr, GatewayBond, Layer, MixId, MixNodeBond};
+use nym_mixnet_contract_common::{Addr, GatewayBond, Layer, MixId, MixNodeBond, EpochId};
 use nym_sphinx::addressing::clients::Recipient;
 use nym_sphinx::forwarding::packet::MixPacket;
 use nym_topology::{gateway, mix, NymTopology};
@@ -247,6 +247,11 @@ impl PacketPreparer {
         (mixnodes, gateways)
     }
 
+    async fn current_epoch(&self) -> Option<EpochId> {
+        let interval = self.validator_cache.current_interval().await;
+        Some(interval.into_inner()?.current_epoch_id())
+    }
+
     pub(crate) fn try_parse_mix_bond(&self, mix: &MixNodeBond) -> Result<mix::Node, String> {
         let identity = mix.mix_node.identity_key.clone();
         mix.try_into().map_err(|_| identity)
@@ -271,6 +276,13 @@ impl PacketPreparer {
         blacklist: &mut HashSet<String>,
     ) -> Option<Vec<TestRoute>> {
         let (mixnodes, gateways) = self.all_mixnodes_and_gateways().await;
+        let epoch = match self.current_epoch().await{
+            None => {
+                error!("Cannot construct test routes. Cannot retrieve epoch");
+                return None;
+            }
+            Some(epoch_id) => epoch_id
+        };
         // separate mixes into layers for easier selection
         let mut layered_mixes = HashMap::new();
         for mix in mixnodes {
@@ -349,6 +361,7 @@ impl PacketPreparer {
                     node_2,
                     node_3,
                     gateway,
+                    epoch,
                 ))
             }
             info!("{:?}", routes);

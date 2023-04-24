@@ -5,6 +5,7 @@ use crate::filter::VersionFilterable;
 use log::warn;
 use nym_mixnet_contract_common::mixnode::MixNodeDetails;
 use nym_mixnet_contract_common::GatewayBond;
+use nym_mixnet_contract_common::EpochId;
 use nym_sphinx_addressing::nodes::NodeIdentity;
 use nym_sphinx_types::Node as SphinxNode;
 use rand::{CryptoRng, Rng};
@@ -98,11 +99,16 @@ pub type MixLayer = u8;
 pub struct NymTopology {
     mixes: HashMap<MixLayer, Vec<mix::Node>>,
     gateways: Vec<gateway::Node>,
+    epoch: EpochId,
 }
 
 impl NymTopology {
-    pub fn new(mixes: HashMap<MixLayer, Vec<mix::Node>>, gateways: Vec<gateway::Node>) -> Self {
-        NymTopology { mixes, gateways }
+    pub fn new(mixes: HashMap<MixLayer, Vec<mix::Node>>, gateways: Vec<gateway::Node>, epoch: EpochId) -> Self {
+        NymTopology { mixes, gateways, epoch }
+    }
+
+    pub fn epoch(&self) -> EpochId {
+        self.epoch
     }
 
     pub fn mixes(&self) -> &HashMap<MixLayer, Vec<mix::Node>> {
@@ -300,6 +306,7 @@ impl NymTopology {
         NymTopology {
             mixes: self.mixes.filter_by_version(expected_mix_version),
             gateways: self.gateways.clone(),
+            epoch: self.epoch,
         }
     }
 }
@@ -307,6 +314,7 @@ impl NymTopology {
 pub fn nym_topology_from_detailed(
     mix_details: Vec<MixNodeDetails>,
     gateway_bonds: Vec<GatewayBond>,
+    epoch: EpochId,
 ) -> NymTopology {
     let mut mixes = HashMap::new();
     for bond in mix_details
@@ -346,7 +354,7 @@ pub fn nym_topology_from_detailed(
         }
     }
 
-    NymTopology::new(mixes, gateways)
+    NymTopology::new(mixes, gateways, epoch)
 }
 
 #[cfg(test)]
