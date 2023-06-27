@@ -140,9 +140,15 @@ export const ClientContextProvider: FCWithChildren = ({ children }) => {
   const startDisconnecting = useCallback(async () => {
     try {
       await invoke('start_disconnecting');
+      afterDisconnection();
     } catch (e) {
       console.log(e);
     }
+  }, []);
+
+  const afterDisconnection = useCallback(async () => {
+    setGatewayPerformance('Good');
+    setConnectedSince(undefined);
   }, []);
 
   const shouldUseUserGateway = !!userDefinedGateway.gateway && userDefinedGateway.isActive;
