@@ -43,9 +43,9 @@ fn main() {
     tauri::Builder::default()
         .manage(Arc::new(RwLock::new(State::new())))
         .invoke_handler(tauri::generate_handler![
+            crate::operations::common::get_env,
             crate::operations::config::get_config_file_location,
             crate::operations::config::get_config_id,
-            crate::operations::common::get_env,
             crate::operations::connection::connect::get_gateway,
             crate::operations::connection::connect::get_service_provider,
             crate::operations::connection::connect::set_gateway,
@@ -56,18 +56,19 @@ fn main() {
             crate::operations::connection::status::get_connection_status,
             crate::operations::connection::status::get_gateway_connection_status,
             crate::operations::connection::status::start_connection_health_check_task,
-            crate::operations::directory::get_services,
-            crate::operations::directory::get_gateways_detailed,
+            crate::operations::directory::gateway::get_gateways,
+            crate::operations::directory::gateway::get_gateways_filtered,
+            crate::operations::directory::service::get_services,
             crate::operations::export::export_keys,
-            crate::operations::window::hide_window,
+            crate::operations::growth::test_and_earn::growth_tne_enter_draw,
             crate::operations::growth::test_and_earn::growth_tne_get_client_id,
-            crate::operations::growth::test_and_earn::growth_tne_take_part,
             crate::operations::growth::test_and_earn::growth_tne_get_draws,
             crate::operations::growth::test_and_earn::growth_tne_ping,
             crate::operations::growth::test_and_earn::growth_tne_submit_wallet_address,
-            crate::operations::growth::test_and_earn::growth_tne_enter_draw,
+            crate::operations::growth::test_and_earn::growth_tne_take_part,
             crate::operations::growth::test_and_earn::growth_tne_toggle_window,
             crate::operations::help::log::help_log_toggle_window,
+            crate::operations::window::hide_window,
         ])
         .on_menu_event(|event| {
             if event.menu_item_id() == menu::SHOW_LOG_WINDOW {
