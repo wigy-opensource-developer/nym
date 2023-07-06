@@ -68,6 +68,7 @@ pub struct State {
     /// established. Additional tests can be triggered.
     connectivity_test_result: ConnectivityTestResult,
 
+    /// User data saved on disk, like user settings
     user_data: UserData,
 }
 
