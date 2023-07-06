@@ -6,14 +6,13 @@ import { getVersion } from '@tauri-apps/api/app';
 import { useEvents } from 'src/hooks/events';
 import { UserDefinedGateway, UserDefinedSPAddress } from 'src/types/service-provider';
 import { getItemFromStorage, setItemInStorage } from 'src/utils';
-import { ConnectionStatusKind, GatewayPerformance } from '../types';
+import { ConnectionStatusKind, GatewayPerformance, UserData } from '../types';
 import { ConnectionStatsItem } from '../components/ConnectionStats';
 import { ServiceProvider } from '../types/directory';
 import initSentry from '../sentry';
 
 const FORAGE_GATEWAY_KEY = 'nym-connect-user-gateway';
 const FORAGE_SP_KEY = 'nym-connect-user-sp';
-const FORAGE_MONITORING_ENABLED = 'nym-connect-monitoring-enabled';
 
 type ModeType = 'light' | 'dark';
 
@@ -75,9 +74,9 @@ export const ClientContextProvider: FCWithChildren = ({ children }) => {
 
   useEffect(() => {
     const initSentryClient = async () => {
-      const monitoring = await getItemFromStorage({ key: FORAGE_MONITORING_ENABLED });
-      setMonitoringEnabled(Boolean(monitoring));
-      if (monitoring === true) {
+      const userData = await invoke<UserData>('get_user_data');
+      setMonitoringEnabled(userData.monitoring || false);
+      if (userData.monitoring) {
         await initSentry();
       }
     };
@@ -185,7 +184,7 @@ export const ClientContextProvider: FCWithChildren = ({ children }) => {
 
   const setMonitoring = async (value: boolean) => {
     setMonitoringEnabled(value);
-    await setItemInStorage({ key: FORAGE_MONITORING_ENABLED, value });
+    await invoke('set_monitoring', { enabled: value });
   };
 
   const contextValue = useMemo(
