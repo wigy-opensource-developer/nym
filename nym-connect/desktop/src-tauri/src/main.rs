@@ -58,11 +58,17 @@ fn main() {
                     release: sentry::release_name!(),
                     sample_rate: 1.0, // TODO lower this in prod
                     traces_sample_rate: 1.0,
-                    ..Default::default()
+                    ..Default::default() // TODO add data scrubbing
+                                         // see https://docs.sentry.io/platforms/rust/data-management/sensitive-data/
                 },
             ));
-            // TODO add data scrubbing
-            // see https://docs.sentry.io/platforms/rust/data-management/sensitive-data/
+
+            sentry::configure_scope(|scope| {
+                scope.set_user(Some(sentry::User {
+                    id: Some("nym".into()),
+                    ..Default::default()
+                }));
+            });
         }
     }
 
